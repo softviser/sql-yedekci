@@ -1,5 +1,21 @@
-# Bağlantı bilgisi (parola) içerebilir — depoya gönderilmez
+﻿# Bağlantı bilgisi (parola) içerebilir
 config.json
 *.log
 *.bak
-*.zip
+
+## .NET
+bin/
+obj/
+*.user
+.vs/
+.vscode/
+.idea/
+
+## Derleme çıktıları
+artifacts/
+
+## İmzalama — özel anahtarı ASLA depoya göndermeyin
+certs/*.pfx
+*.pfx
+*.p12
+certs/*.txt

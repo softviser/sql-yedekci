@@ -2,6 +2,26 @@
 
 Biçim [Keep a Changelog](https://keepachangelog.com/tr-TR/1.1.0/) esas alınmıştır, sürüm numaraları [Semantic Versioning](https://semver.org/lang/tr/) kurallarına uyar.
 
+## [3.0.1] - 2026-10-15
+
+PowerShell scripti yerini arayüzlü bir Windows uygulamasına bıraktı.
+
+### Eklendi
+- Arayüz: Bağlantı, Yedekleme, Geri yükleme ve Günlük sekmeleri.
+- Bu makinedeki ve ağdaki (SQL Browser) SQL Server örneklerini arama.
+- Windows ya da SQL Server kimlik doğrulamasıyla bağlantı testi; sürüm, sysadmin yetkisi ve sunucunun yerel olup olmadığı gösteriliyor.
+- Listeden tekli / çoklu veritabanı seçimi.
+- Saatlik, günlük ve haftalık zamanlama; görev uygulama içinden kuruluyor ve kaldırılıyor.
+- Görev kurulurken `NT AUTHORITY\SYSTEM` hesabının yedek yetkisi kontrol ediliyor, eksikse en az yetki verilebiliyor.
+- Yedekten sonra `RESTORE VERIFYONLY` ile doğrulama (isteğe bağlı).
+- Geri yükleme: `.bak` ya da `.zip`'ten aynı ya da yeni adla; dosyalar sunucunun varsayılan klasörlerine taşınıyor, üzerine yazmada açık bağlantılar kesiliyor.
+- SQL parolası DPAPI ile şifreli saklanıyor; ayar klasörüne yalnızca Administrators ve SYSTEM erişebiliyor.
+- Softviser Yazılım self-signed sertifikasıyla imzalı kurulum dosyası ve taşınabilir zip.
+
+### Değişti
+- **Kırıcı değişiklik:** Eski yedekleri silme gün sayısına göre değil, veritabanı başına saklanacak yedek sayısına göre yapılıyor.
+- **Kırıcı değişiklik:** Ayarlar `config.json` yerine `%ProgramData%\Softviser\SqlYedekci\settings.json` dosyasında; loglar aynı klasörün `logs` alt klasöründe.
+
 ## [2.1.4] - 2026-10-14
 
 ### Düzeltildi
@@ -55,4 +75,5 @@ Biçim [Keep a Changelog](https://keepachangelog.com/tr-TR/1.1.0/) esas alınmı
 
 - İlk sürüm: tek bir veritabanının tam yedeğini alıp zip olarak sıkıştıran script.
 
+[3.0.1]: https://github.com/softviser/sql-yedekci/releases/tag/v3.0.1
 [2.1.4]: https://github.com/softviser/sql-yedekci/releases/tag/v2.1.4

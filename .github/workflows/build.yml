@@ -1,0 +1,82 @@
+﻿name: Derle ve Yayınla
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Sürüm numarası
+        id: ver
+        shell: pwsh
+        run: |
+          if ($env:GITHUB_REF -like 'refs/tags/v*') { $v = $env:GITHUB_REF_NAME.TrimStart('v') }
+          else { $v = "3.0.$env:GITHUB_RUN_NUMBER" }
+          "version=$v" >> $env:GITHUB_OUTPUT
+
+      - name: Testler
+        run: dotnet run --project tests/SqlYedekci.Tests
+
+      - name: Inno Setup
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) {
+            choco install innosetup -y --no-progress
+          }
+
+      # CODESIGN_PFX_BASE64 + CODESIGN_PFX_PASSWORD secret'ları tanımlıysa Softviser sertifikası kullanılır.
+      # Tanımlı değilse (ör. fork'larda) geçici bir self-signed sertifika üretilir.
+      - name: İmzalama sertifikası
+        if: github.event_name != 'pull_request'
+        shell: pwsh
+        env:
+          PFX_B64: ${{ secrets.CODESIGN_PFX_BASE64 }}
+          PFX_PASSWORD: ${{ secrets.CODESIGN_PFX_PASSWORD }}
+        run: |
+          New-Item -ItemType Directory -Force certs | Out-Null
+          if ($env:PFX_B64) {
+            [IO.File]::WriteAllBytes("$PWD\certs\softviser-codesign.pfx", [Convert]::FromBase64String($env:PFX_B64))
+            $pfx = New-Object Security.Cryptography.X509Certificates.X509Certificate2("$PWD\certs\softviser-codesign.pfx", $env:PFX_PASSWORD)
+            Export-Certificate -Cert $pfx -FilePath certs\softviser-codesign.cer | Out-Null
+            "CODESIGN_PFX_PASSWORD=$env:PFX_PASSWORD" >> $env:GITHUB_ENV
+            "HAS_RELEASE_CERT=true" >> $env:GITHUB_ENV
+          } else {
+            $pw = [Guid]::NewGuid().ToString('N')
+            .\scripts\new-selfsigned-cert.ps1 -Password (ConvertTo-SecureString $pw -AsPlainText -Force)
+            "::add-mask::$pw"
+            "CODESIGN_PFX_PASSWORD=$pw" >> $env:GITHUB_ENV
+          }
+
+      - name: Derle
+        shell: pwsh
+        run: |
+          $sign = '${{ github.event_name }}' -ne 'pull_request'
+          .\build.ps1 -Version ${{ steps.ver.outputs.version }} -Sign:$sign
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SqlYedekci-${{ steps.ver.outputs.version }}
+          path: artifacts/*
+
+      # Geçici sertifikayla imzalanmış paketler sürüm sayfasına yüklenmez.
+      - name: GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v') && env.HAS_RELEASE_CERT == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*
+          generate_release_notes: true
+

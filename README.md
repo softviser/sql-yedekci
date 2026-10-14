@@ -1,81 +1,76 @@
 # SQL Yedekçi
 
-SQL Server veritabanlarını zamanlanmış olarak yedekleyen, yedekleri sıkıştıran ve eski yedekleri temizleyen tek dosyalık bir PowerShell aracı.
-
-Kurulum gerektirmez, ek modül ya da program istemez. Windows'ta hazır gelen PowerShell 5.1 ve .NET ile çalışır; zamanlama için Windows Görev Zamanlayıcı kullanılır.
+SQL Server veritabanlarını zamanlanmış olarak yedekleyen, yedekleri sıkıştıran, eski yedekleri temizleyen ve tek tıkla geri yükleyen küçük bir Windows uygulaması.
 
 Geliştirici: [Softviser Yazılım](https://softviser.com.tr) — MIT lisansı ile açık kaynak.
 
 ## Neler yapıyor
 
-- Seçilen veritabanlarının ya da (liste boşsa) tüm kullanıcı veritabanlarının tam yedeğini alır (`BACKUP DATABASE ... WITH CHECKSUM`).
-- Her yedeği `.zip` olarak sıkıştırır ve `.bak` dosyasını siler. 4 GB üzerindeki yedekler de desteklenir (Zip64).
-- Belirtilen günden eski yedekleri siler. Her veritabanının **en yeni yedeği yaşına bakılmadan korunur**; yedekleme haftalarca başarısız olsa bile elinizde son yedek kalır.
-- Yalnızca kendi oluşturduğu dosyalara (`<veritabanı>_YYYYMMDD_HHMMSS.zip/.bak`) dokunur.
-- Her çalışmayı aylık log dosyasına yazar. Bir veritabanı başarısız olursa diğerlerine devam eder, sonunda çıkış kodu `1` döner.
-- Tek komutla günlük zamanlanmış görev kurar.
+- **Sunucu bulma:** Bu bilgisayardaki SQL Server örneklerini ve ağda SQL Browser ile yayın yapan sunucuları listeler. Listede olmayan sunucu elle yazılabilir.
+- **Bağlantı testi ve doğrulama:** Windows ya da SQL Server kimlik doğrulamasıyla bağlanır; sürümü, oturumun sysadmin olup olmadığını ve sunucunun bu makinede olup olmadığını gösterir.
+- **Tekli / çoklu veritabanı seçimi:** Sunucudaki çevrimiçi kullanıcı veritabanlarından istediklerinizi işaretlersiniz (Tümü / Hiçbiri).
+- **Zamanlanmış görev:** Saatlik (her N saatte), günlük ya da haftalık. Görev Windows Görev Zamanlayıcı'ya `SYSTEM` hesabıyla kurulur; kimse oturum açmamışken de çalışır.
+- **Yedek döndürme:** Her veritabanı için saklanacak yedek sayısı belirlenir; yeni yedek alındıkça en eskiler silinir. Her zaman en az bir yedek kalır. Uygulama yalnızca kendi oluşturduğu dosyalara (`<veritabanı>_YYYYMMDD_HHMMSS.zip/.bak`) dokunur.
+- **Sıkıştırma ve doğrulama:** Yedek `CHECKSUM` ile alınır, isteğe bağlı `RESTORE VERIFYONLY` ile doğrulanır ve zip'lenir (4 GB üzeri desteklenir).
+- **Geri yükleme:** Yedek listesinden ya da başka bir `.bak`/`.zip` dosyasından, aynı ya da yeni adla geri yükler. Zip otomatik açılır, veri/log dosyaları sunucunun varsayılan klasörlerine taşınır; üzerine yazmada açık bağlantılar kesilir.
+- **Günlük:** Her işlem aylık log dosyasına yazılır ve uygulama içinden görülebilir.
 
 ## Kurulum
 
-1. [Releases](https://github.com/softviser/sql-yedekci/releases) sayfasından son sürümün zip'ini indirip SQL Server'ın çalıştığı makinede bir klasöre açın (örn. `C:\Araclar\SqlYedekci`).
-2. `config.example.json` dosyasını `config.json` olarak kopyalayıp düzenleyin:
+[Releases](https://github.com/softviser/sql-yedekci/releases) sayfasında iki seçenek var:
 
-```json
-{
-    "ConnectionString": "Server=localhost;Integrated Security=True",
-    "Databases": [],
-    "BackupDir": "D:\\SqlYedek",
-    "RetentionDays": 14,
-    "Compress": true
-}
-```
+- **`SqlYedekci-x.y.z-setup-win-x64.exe`** — normal kurulum (önerilen). Program Files'a kurar, Başlat menüsüne ekler. Kaldırıldığında zamanlanmış görev de silinir.
+- **`SqlYedekci-x.y.z-portable-win-x64.zip`** — kurulum gerektirmez. Zamanlanmış görev exe'nin bulunduğu yolu kullandığından, görevi kurduktan sonra exe'yi taşımayın.
 
-| Ayar | Açıklama |
-|------|----------|
-| `ConnectionString` | SQL Server bağlantı cümlesi. Adlandırılmış örnek için `Server=localhost\\SQLEXPRESS`. |
-| `Databases` | Yedeklenecek veritabanları, örn. `["Satis", "Stok"]`. Boş bırakılırsa çevrimiçi tüm kullanıcı veritabanları yedeklenir. |
-| `BackupDir` | Yedeklerin ve log dosyasının yazılacağı klasör. |
-| `RetentionDays` | Bu günden eski yedekler silinir. `0` temizliği kapatır. Varsayılan `14`. |
-| `Compress` | `false` olursa `.bak` dosyası olduğu gibi bırakılır. Varsayılan `true`. |
+Windows 10/11 ya da Windows Server 2016+ (64 bit) gerekir. .NET kurulu olmasına gerek yoktur. Uygulama yönetici yetkisiyle açılır (görev kurmak ve ayarları korumak için).
 
-3. Bir kez elle deneyin:
+## Kullanım
 
-```powershell
-powershell -ExecutionPolicy Bypass -File .\sql-yedekci.ps1
-```
-
-4. Yönetici olarak açtığınız PowerShell'de günlük görevi kurun:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\sql-yedekci.ps1 -Install -At 02:00
-```
-
-Görev her gün belirtilen saatte `SYSTEM` hesabıyla çalışır. Kaldırmak için `-Uninstall`. Farklı bir ayar dosyası için `-Config <yol>` eklenebilir; birden fazla sunucu için kopya klasörler kullanın.
+1. **Bağlantı** sekmesinde *Sunucuları ara*'ya basın ya da sunucu adını yazın (`.`, `SUNUCU`, `SUNUCU\SQLEXPRESS`). Kimlik doğrulamayı seçip *Bağlantıyı test et*'e basın.
+2. **Yedekleme** sekmesinde veritabanlarını işaretleyin, hedef klasörü, sıklığı, saati ve saklanacak yedek sayısını seçin.
+3. *Kaydet ve zamanla* bağlantıyı tekrar doğrular, ayarları kaydeder ve görevi kurar. Ardından *Şimdi yedekle* ile hemen bir deneme yapın.
+4. **Geri yükleme** sekmesinde yedeği seçin, hedef veritabanı adını yazın ve *Geri yükle*'ye basın.
 
 ## Yetkiler — dikkat
 
-- **Yedek dosyasını SQL Server servisi yazar**, bu araç değil. `BackupDir` klasörüne SQL Server servis hesabının (örn. `NT Service\MSSQLSERVER`) yazma izni olmalıdır. Uzak bir sunucu yedekleniyorsa `BackupDir` o sunucunun gördüğü bir yol olmalıdır (yerel yol ya da UNC paylaşımı), sıkıştırma için aracın da aynı yola erişebilmesi gerekir. En kolayı aracı SQL Server makinesinde çalıştırmaktır.
-- Görev `SYSTEM` hesabıyla çalıştığından `Integrated Security=True` kullanılıyorsa `NT AUTHORITY\SYSTEM` girişinin SQL Server'da yedek alma yetkisi olmalıdır (yeni SQL Server sürümlerinde varsayılan olarak yoktur). İki seçenek:
-  - Her veritabanında `NT AUTHORITY\SYSTEM` kullanıcısına `db_backupoperator` rolü verin, ya da
-  - Bağlantı cümlesinde yalnızca yedek yetkisi olan bir SQL kullanıcısı kullanın (`User Id=...;Password=...`). Bu durumda `config.json` dosyasının okuma iznini yöneticilerle sınırlayın.
+- **Yedek dosyasını SQL Server servisi yazar**, bu uygulama değil. Hedef klasöre SQL Server servis hesabının (örn. `NT Service\MSSQLSERVER`) yazma izni olmalıdır. Sunucu başka bir makinedeyse hedef klasör, SQL Server'ın yazabildiği ve bu bilgisayarın da erişebildiği bir paylaşım (`\\sunucu\yedek`) olmalıdır. En kolayı uygulamayı SQL Server makinesine kurmaktır.
+- Görev `SYSTEM` hesabıyla çalışır. Windows kimlik doğrulaması seçiliyse SQL Server'a `NT AUTHORITY\SYSTEM` olarak bağlanır ve yeni SQL Server sürümlerinde bu hesabın varsayılan olarak yedek yetkisi yoktur. *Kaydet ve zamanla* bunu kontrol eder; eksikse en az yetkiyi (her veritabanında `db_backupoperator`, doğrulama için master'da `CREATE DATABASE`) vermeyi önerir.
+- SQL Server kimlik doğrulamasında parola, `%ProgramData%\Softviser\SqlYedekci\settings.json` içinde Windows DPAPI ile şifrelenir. Klasöre yalnızca Administrators ve SYSTEM erişebilir.
 
-## Geri yükleme
+## Dosyalar
 
-Zip'i açıp çıkan `.bak` dosyasını SSMS'te **Restore Database** ile ya da:
+| Ne | Nerede |
+|----|--------|
+| Ayarlar | `%ProgramData%\Softviser\SqlYedekci\settings.json` |
+| Loglar | `%ProgramData%\Softviser\SqlYedekci\logs\sql-yedekci_YYYYMM.log` |
+| Zamanlanmış görev | Görev Zamanlayıcı → `SQL Yedekci` (`SqlYedekci.exe --run`) |
 
-```sql
-RESTORE DATABASE [Satis] FROM DISK = N'D:\SqlYedek\Satis_20261014_020000.bak' WITH REPLACE
-```
+`SqlYedekci.exe --run` kayıtlı ayarlarla arayüz açmadan bir kez yedek alır; hata olursa çıkış kodu sıfırdan büyüktür.
 
-Yedeklerinizi düzenli aralıklarla geri yükleyerek deneyin; denenmemiş yedek yedek sayılmaz.
+## Dijital imza
 
-## Testler
+Dağıtılan dosyalar Softviser Yazılım adına oluşturulmuş self-signed bir sertifika ile imzalanır. Ticari bir sertifika otoritesinden alınmadığı için Windows ilk çalıştırmada "Bilinmeyen yayımcı" ya da SmartScreen uyarısı gösterebilir.
 
-SQL Server gerektirmeyen kısımlar (dosya adı, sıkıştırma, temizlik) için:
+İmzanın Softviser'a ait olduğunu bilgisayarınızda tanıtmak isterseniz, sertifika parmak izini sürüm notlarındakiyle karşılaştırdıktan sonra yönetici olarak açtığınız PowerShell'de:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\tests\test.ps1
+powershell -ExecutionPolicy Bypass -File .\trust-cert.ps1 -CerPath .\softviser-codesign.cer
 ```
+
+## Derleme
+
+.NET 8 SDK ve (kurulum dosyası için) [Inno Setup 6](https://jrsoftware.org/isinfo.php) gerekir.
+
+```powershell
+.\build.ps1                                   # imzasız: taşınabilir zip + kurulum
+$env:CODESIGN_PFX_PASSWORD = '...'
+.\build.ps1 -Sign -PfxPath certs\softviser-codesign.pfx
+dotnet run --project tests\SqlYedekci.Tests   # SQL Server gerektirmeyen testler
+```
+
+## 2.x'ten geçiş
+
+2.x sürümleri tek dosyalık bir PowerShell scriptiydi ([v2.1.4](https://github.com/softviser/sql-yedekci/tree/v2.1.4)). 3.x ayarları arayüzden yapılır; eski `config.json` okunmaz. Ayarları yeni uygulamada yeniden girip *Kaydet ve zamanla*'ya basın; görev adı aynı olduğundan eski görevin yerine geçer. Eski yedek dosyaları aynı adlandırmayı kullandığından yeni uygulamada listelenir ve döndürmeye dahil edilir.
 
 ## Sürüm geçmişi
 

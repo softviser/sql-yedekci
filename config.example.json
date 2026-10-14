@@ -1,0 +1,7 @@
+{
+    "ConnectionString": "Server=localhost;Integrated Security=True",
+    "Databases": [],
+    "BackupDir": "D:\\SqlYedek",
+    "RetentionDays": 14,
+    "Compress": true
+}

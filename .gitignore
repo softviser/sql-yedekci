@@ -1,0 +1,5 @@
+# Bağlantı bilgisi (parola) içerebilir — depoya gönderilmez
+config.json
+*.log
+*.bak
+*.zip
